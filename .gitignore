@@ -1,0 +1,7 @@
+/.vagrant/machines/master/virtualbox/action_provision
+*.retry
+/.vagrant
+/api_key
+*.tfstate
+/terraform/terraform.tfstate.backup
+/terraform/.terraform

@@ -1,0 +1,5 @@
+git:latest
+workflow-job:2.11
+antisamy-markup-formatter
+matrix-auth
+blueocean

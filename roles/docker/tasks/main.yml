@@ -1,0 +1,53 @@
+---
+
+
+- name: install using the repository
+  apt:
+    name: "{{item}}"
+  with_items:
+    - apt-transport-https
+    - ca-certificates
+    - curl
+    - software-properties-common
+
+- name: Add Docker’s official GPG key
+  shell: curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+
+- command: lsb_release -cs
+  register: lsb_release
+
+- name: set up the stable repository
+  apt_repository:
+    repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu {{lsb_release.stdout}} stable
+    state: present
+
+- name: install docker
+  apt:
+    update_cache: yes
+    name: docker-ce={{docker_version}}
+
+- name: our username to the docker group
+  user:
+    name: "{{user_of_docker_group}}"
+    groups: docker
+    append: yes
+
+- name: add docker registry
+  copy:
+    content: |
+      {
+        "registry-mirrors": ["{{docker_registry_mirror}}"]
+      }
+    dest: /etc/docker/daemon.json
+  when: docker_registry_mirror is defined
+
+- name: reload daemon
+  shell: systemctl daemon-reload
+  when: docker_registry_mirror is defined
+
+- name: Enable restart docker
+  service:
+    name: docker
+    enabled: yes
+    state: restarted
+  when: docker_registry_mirror is defined

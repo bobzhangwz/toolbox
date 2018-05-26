@@ -1,0 +1,54 @@
+---
+
+- name: Pull haproxy engine
+  docker_image:
+    name: "{{haproxy_image}}"
+    tag: "{{haproxy_image_tag}}"
+
+- name: create config dir
+  file:
+    path: /usr/local/etc/haproxy/
+    state: directory
+    mode: 0777
+
+- name: copy config file
+  template:
+    src: haproxy.cfg.j2
+    dest: /usr/local/etc/haproxy/haproxy.cfg
+    owner: root
+    group: root
+    mode: 0600
+
+- name: create haproxy service file
+  copy:
+    content: |
+      [Unit]
+      Description=haproxy docker Service
+      After=docker.service
+      Requires=docker.service
+      [Service]
+      ExecStartPre=-/usr/bin/docker rm -f haproxy
+      ExecStart=/usr/bin/docker run --network=host -v /usr/local/etc/haproxy:/usr/local/etc/haproxy:ro --name haproxy {{haproxy_image}}:{{haproxy_image_tag}}
+      ExecStop=/usr/bin/docker stop haproxy
+      Restart=always
+      RestartSec=10
+      StandardOutput=syslog
+      StandardError=syslog
+      [Install]
+      WantedBy=multi-user.target
+    dest: /etc/systemd/system/haproxy.service
+    owner: root
+    group: root
+    mode: 0640
+
+- name: reload daemon
+  shell: systemctl daemon-reload
+
+- name: Enable haproxy
+  sudo: yes
+  service:
+    name: "{{item}}"
+    enabled: yes
+    state: restarted
+  with_items:
+    - haproxy

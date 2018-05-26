@@ -1,0 +1,5 @@
+---
+
+jenkins_image: jenkins/jenkins
+jenkins_image_tag: lts
+jenkins_build_dir: /usr/share/jenkins

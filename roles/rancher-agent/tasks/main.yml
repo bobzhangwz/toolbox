@@ -1,0 +1,42 @@
+---
+
+- name: import apikey
+  include_vars: "{{ inventory_dir }}/api_key"
+  delegate_to: localhost
+  when: api_accesskey is not defined
+
+- name: Get the projects info
+  uri:
+    method: GET
+    user: "{{api_accesskey}}"
+    password: "{{api_secretvalue}}"
+    status_code: 200
+    url: "{{rancher_base_url}}/projects"
+    return_content: yes
+  register: projects_info
+- set_fact:
+    default_project_id: "{{ projects_info.json['data'][0]['id'] }}"
+
+- name: Return the registration token URL of Rancher server
+  uri:
+    method: GET
+    user: "{{api_accesskey}}"
+    password: "{{api_secretvalue}}"
+    status_code: 200
+    url: "{{rancher_base_url}}/projects/{{ default_project_id }}/registrationtokens?state=active&limit=-1&sort=name"
+    return_content: yes
+  register: rancher_register_urlcontent
+
+- set_fact:
+    rancher_register_info: "{{ rancher_register_urlcontent.json['data'][0] }}"
+
+- name: Register the Host machine with the Rancher server
+  docker_container:
+    image: "{{rancher_register_info['image']}}"
+    name: agent-tmp
+    privileged: true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/rancher:/var/lib/rancher
+    command: "{{ rancher_register_info['registrationUrl'] }}"
+    cleanup: true

@@ -1,0 +1,167 @@
+---
+
+- mysql_db:
+    login_password: "{{mysql_pass}}"
+    login_host: "{{mysql_host}}"
+    login_port: "{{mysql_port}}"
+    login_user: "{{mysql_user}}"
+    state: present
+    name: "{{rancher_dbtable}}"
+
+- name: Pull rancher image/server
+  docker_image:
+    name: rancher/server
+    tag: stable
+
+- name: create docker rancher service file
+  copy:
+    content: |
+      [Unit]
+      Description=rancher Service
+      After=docker.service
+      Requires=docker.service
+      [Service]
+      ExecStartPre=-/usr/bin/docker rm -f rancher-server
+      ExecStart=/usr/bin/docker run -p 127.0.0.1:8080:8080 -p 9108:9108 --name rancher-server -e CATTLE_PROMETHEUS_EXPORTER=true rancher/server:stable --db-host {{mysql_host}} --db-port {{mysql_port}} --db-user {{mysql_user}} --db-pass {{mysql_pass}} --db-name {{rancher_dbtable}}
+      ExecStop=/usr/bin/docker stop rancher-server
+      Restart=always
+      RestartSec=10
+      StandardOutput=syslog
+      StandardError=syslog
+      [Install]
+      WantedBy=multi-user.target
+    dest: /etc/systemd/system/rancher-server.service
+    owner: root
+    group: root
+    mode: 0640
+
+- name: reload daemon
+  shell: systemctl daemon-reload
+
+- name: Enable rancher server
+  service:
+    name: "{{item}}"
+    enabled: yes
+    state: started
+  with_items:
+    - rancher-server
+
+# - name: Run rancher server
+#   docker_container:
+#     name: rancher-server
+#     image: rancher/server:stable
+#     restart_policy: always
+#     command: >
+#       --db-host {{mysql_host}} --db-port {{mysql_port}} --db-user {{mysql_user}} --db-pass {{mysql_password}} --db-name {{rancher_dbtable}}
+#     env:
+#       CATTLE_PROMETHEUS_EXPORTER: true
+#     ports:
+#       - "127.0.0.1:8080:8080"
+#       - "9108:9108"
+
+- name: Wait 200s until server is up
+  wait_for: host={{ rancher_server }} port={{ rancher_port }} delay=200
+
+- name: Get the accounts info
+  uri:
+    method: GET
+    status_code: 200
+    url: "{{rancher_base_url}}/accounts"
+    return_content: yes
+  register: accounts_info
+
+- set_fact:
+    default_account_id: "{{ accounts_info.json['data'][0]['id'] }}"
+
+- name: Create api key
+  uri:
+    method: POST
+    run_once: true
+    status_code: 201
+    url: "{{rancher_base_url}}/apiKey"
+    return_content: yes
+    body_format: json
+    body:
+      name: superuser
+      type: apikey
+      accountId: "{{default_account_id}}"
+  register: apikey_info
+  run_once: true
+
+- set_fact:
+    api_accesskey: "{{ apikey_info.json['publicValue'] }}"
+    api_secretvalue: "{{ apikey_info.json['secretValue'] }}"
+
+- name: Create user account projects info
+  uri:
+    method: POST
+    status_code: 201
+    url: "{{rancher_base_url}}/localAuthConfigs"
+    body_format: json
+    password: "{{ api_secretvalue }}"
+    user: "{{ api_accesskey }}"
+    body:
+      name: admin
+      username: "{{rancher_init_user}}"
+      enabled: true
+      password: "{{rancher_init_pass}}"
+      accessMode: unrestricted
+  when: apikey_info is defined
+
+- name: Update rancher api-host
+  uri:
+    method: PUT
+    status_code: 200
+    url: "{{rancher_base_url}}/settings/api.host"
+    body_format: json
+    password: "{{ api_secretvalue }}"
+    user: "{{ api_accesskey }}"
+    body:
+      activeValue : null
+      baseType: setting
+      id: api.host
+      inDb: false
+      name: api.host
+      source: null
+      type: activeSetting
+      value: "http://{{rancher_server}}"
+  when: apikey_info is defined
+
+- name: Get the projects info
+  uri:
+    method: GET
+    user: "{{api_accesskey}}"
+    password: "{{api_secretvalue}}"
+    status_code: 200
+    url: "{{rancher_base_url}}/projects"
+    return_content: yes
+  register: projects_info
+- set_fact:
+    default_project_id: "{{ projects_info.json['data'][0]['id'] }}"
+
+- name: Create the registration token
+  uri:
+    method: POST
+    user: "{{api_accesskey}}"
+    password: "{{api_secretvalue}}"
+    status_code: 201
+    url: "{{rancher_base_url}}/projects/{{ default_project_id }}/registrationtokens"
+    return_content: yes
+
+- debug:
+    msg: "Please save apikey({{api_accesskey}}) and apisecret({{api_secretvalue}})"
+  when: apikey_info is defined
+
+- name: Confirm
+  pause:
+    prompt: '!!!Please save API_KEY: {{api_accesskey}} and API_SECRET: {{api_secretvalue}} !!! Press return to continue. Press Ctrl+c and then "a" to abort'
+  when: apikey_info is defined
+
+- name: Save secret api key to local
+  become: false
+  copy:
+    dest: "{{ inventory_dir }}/api_key"
+    content: |
+      api_accesskey: {{api_accesskey}}
+      api_secretvalue: {{api_secretvalue}}
+  delegate_to: localhost

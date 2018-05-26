@@ -1,0 +1,14 @@
+---
+
+- name: init docker env
+  hosts: Master
+  become: true
+  gather_facts: yes
+  vars:
+    docker_version: 18.03.1~ce-0~ubuntu
+    user_of_docker_group: vagrant
+    docker_registry_mirror: https://registry.docker-cn.com
+  roles:
+    - base
+    - docker
+    - jenkins

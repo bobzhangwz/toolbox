@@ -1,0 +1,7 @@
+---
+
+haproxy_image: haproxy
+haproxy_image_tag: 1-alpine
+
+haproxy_user: admin
+haproxy_pass: haproxy

@@ -1,0 +1,52 @@
+---
+- name: get docker version
+  shell: docker --version | cut -d' ' -f3 | cut -d',' -f1
+  register: docker_version
+
+- name: get docker group id
+  shell: "stat -c '%g' /var/run/docker.sock"
+  register: docker_gid
+
+- name: pull docker images
+  docker_image:
+    name: "{{jenkins_image}}"
+    tag: "{{jenkins_image_tag}}"
+
+
+- name: create jenkins image build dir
+  file:
+    dest: "{{jenkins_build_dir}}"
+    state: directory
+
+- name: cp jenkins files
+  copy:
+    src: plugins.txt
+    dest: "{{jenkins_build_dir}}"
+
+- name: generate dockerfile
+  template:
+    dest: "{{jenkins_build_dir}}/Dockerfile"
+    src: Dockerfile.j2
+
+- name: Build images
+  docker_image:
+    path: "{{jenkins_build_dir}}"
+    # force: true
+    name: jenkins_z
+
+- name: create jenkins data file
+  file:
+    path: /var/jenkins_home
+    state: directory
+    mode: 0777
+
+- name: run jenkins
+  docker_container:
+    name: jenkins
+    image: jenkins_z
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "/var/jenkins_home:/var/jenkins_home"
+    ports:
+      - "8080:8080"
+      - "50000:50000"

@@ -1,0 +1,3 @@
+rancher_server: "{{ hostvars['rancher']['ansible_ssh_host'] }}"
+rancher_port: 8080
+rancher_base_url: http://{{ rancher_server }}:{{ rancher_port }}/v2-beta

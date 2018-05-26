@@ -1,0 +1,5 @@
+---
+
+mysql_image: mysql
+mysql_image_tag: 5
+mysql_pass: 'Root!234'

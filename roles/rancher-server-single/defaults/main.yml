@@ -1,0 +1,15 @@
+---
+
+mysql_pass: root
+mysql_host: localhost
+mysql_port: 3306
+mysql_user: root
+
+rancher_dbtable: cattle
+rancher_init_user: admin
+rancher_init_pass: admin
+
+# rancher_server: "{{ hostvars['rancher']['ansible_ssh_host'] }}"
+rancher_server: 127.0.0.1
+rancher_port: 8080
+rancher_base_url: http://{{ rancher_server }}:{{ rancher_port }}/v2-beta

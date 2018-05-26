@@ -1,0 +1,29 @@
+---
+
+- name: Pull mysql image
+  docker_image:
+    name: "{{mysql_image}}"
+    tag: "{{mysql_image_tag}}"
+
+- name: Create mysql data file
+  file:
+    path: /var/lib/mysql
+    state: directory
+    mode: 0777
+
+- name: Run mysql
+  docker_container:
+    name: mysql
+    image: "{{mysql_image}}:{{mysql_image_tag}}"
+    restart_policy: always
+    env:
+      MYSQL_ROOT_PASSWORD: "{{mysql_pass}}"
+    volumes:
+      - '/var/lib/mysql:/var/lib/mysql'
+    ports:
+      - '3306:3306'
+
+- name: Wait for mysql start
+  wait_for:
+    port: 3306
+    delay: 8
